@@ -11,6 +11,35 @@ export const useBrailleStore = defineStore('braille', () => {
   const selectedDots = ref<number[]>([])
   const score = ref({ correct: 0, total: 0 })
   const history = ref<{ input: string; correct: boolean }[]>([])
+  const guideActive = ref(true)
+  const guideWrongDot = ref<number | null>(null)
+
+  const correctDots = computed(() => BRAILLE_MAP[quizChar.value] || [])
+
+  const guideCompletedSteps = computed(() => {
+    const dots = correctDots.value
+    let count = 0
+    for (let i = 0; i < dots.length; i++) {
+      if (selectedDots.value.includes(dots[i])) {
+        count++
+      } else {
+        break
+      }
+    }
+    return count
+  })
+
+  const guideCurrentDot = computed(() => {
+    const dots = correctDots.value
+    if (guideCompletedSteps.value < dots.length) {
+      return dots[guideCompletedSteps.value]
+    }
+    return null
+  })
+
+  const guideAllComplete = computed(() =>
+    correctDots.value.length > 0 && guideCompletedSteps.value >= correctDots.value.length
+  )
 
   const brailleUnicode = computed(() =>
     brailleOutput.value.map(d => dotsToUnicode(d)).join('')
@@ -21,7 +50,6 @@ export const useBrailleStore = defineStore('braille', () => {
   }
 
   function reverseTranslate() {
-    // Simple: take selectedDots and find matching char
     return brailleToText(selectedDots.value)
   }
 
@@ -29,12 +57,25 @@ export const useBrailleStore = defineStore('braille', () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     quizChar.value = chars[Math.floor(Math.random() * chars.length)]
     selectedDots.value = []
+    guideWrongDot.value = null
   }
 
   function toggleDot(dot: number) {
     const idx = selectedDots.value.indexOf(dot)
-    if (idx >= 0) selectedDots.value.splice(idx, 1)
-    else selectedDots.value.push(dot)
+    if (idx >= 0) {
+      selectedDots.value.splice(idx, 1)
+    } else {
+      if (guideActive.value && quizChar.value) {
+        const expected = guideCurrentDot.value
+        if (expected !== null && dot !== expected) {
+          guideWrongDot.value = dot
+          setTimeout(() => { guideWrongDot.value = null }, 800)
+          return
+        }
+      }
+      selectedDots.value.push(dot)
+      guideWrongDot.value = null
+    }
   }
 
   function checkQuizAnswer() {
@@ -51,6 +92,10 @@ export const useBrailleStore = defineStore('braille', () => {
     history.value = []
   }
 
+  function toggleGuide() {
+    guideActive.value = !guideActive.value
+  }
+
   function exportPDF(): string {
     const lines = inputText.value.toUpperCase().split('')
     let out = '盲文翻译输出\n\n'
@@ -63,7 +108,8 @@ export const useBrailleStore = defineStore('braille', () => {
 
   return {
     inputText, brailleOutput, learnMode, quizChar, selectedDots, score, history,
-    brailleUnicode, translate, reverseTranslate, generateQuiz, toggleDot,
-    checkQuizAnswer, resetScore, exportPDF
+    guideActive, guideWrongDot, correctDots, guideCompletedSteps, guideCurrentDot,
+    guideAllComplete, brailleUnicode, translate, reverseTranslate, generateQuiz,
+    toggleDot, checkQuizAnswer, resetScore, toggleGuide, exportPDF
   }
 })
